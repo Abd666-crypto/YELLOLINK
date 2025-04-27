@@ -20,21 +20,21 @@ export default function RiderStatus() {
   // Fetch active ride
   const { data: ride, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/rides/rider', MOCK_USER_ID, 'active'],
-    queryFn: () => apiRequest(`/api/rides/rider/${MOCK_USER_ID}/active`),
+    queryFn: () => apiRequest<Ride>(`/api/rides/rider/${MOCK_USER_ID}/active`),
     refetchInterval: 5000, // Poll every 5 seconds for updates
   });
 
   // Fetch driver details if assigned
   const { data: driver } = useQuery({
     queryKey: ['/api/drivers', ride?.driverId],
-    queryFn: () => apiRequest(`/api/drivers/${ride?.driverId}`),
+    queryFn: () => apiRequest<Driver>(`/api/drivers/${ride?.driverId}`),
     enabled: !!ride?.driverId,
   });
 
   // Fetch user details for driver
   const { data: driverUser } = useQuery({
     queryKey: ['/api/users', driver?.userId],
-    queryFn: () => apiRequest(`/api/users/${driver?.userId}`),
+    queryFn: () => apiRequest<User>(`/api/users/${driver?.userId}`),
     enabled: !!driver?.userId,
   });
 
@@ -45,9 +45,9 @@ export default function RiderStatus() {
     setIsSubmitting(true);
     
     try {
-      await apiRequest(`/api/rides/${ride.id}/complete`, {
+      await apiRequest<Ride>(`/api/rides/${ride.id}/complete`, {
         method: "PUT",
-        body: JSON.stringify({ rating }),
+        body: { rating },
       });
       
       toast({

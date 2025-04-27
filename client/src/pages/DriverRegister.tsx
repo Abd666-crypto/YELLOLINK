@@ -56,9 +56,9 @@ export default function DriverRegister() {
         role: "driver"
       };
       
-      const user = await apiRequest("/api/users", {
+      const user = await apiRequest<{id: number}>("/api/users", {
         method: "POST",
-        body: JSON.stringify(userData),
+        body: userData,
       });
       
       // Register driver
@@ -71,7 +71,7 @@ export default function DriverRegister() {
       
       await apiRequest("/api/drivers", {
         method: "POST",
-        body: JSON.stringify(driverData),
+        body: driverData,
       });
       
       toast({

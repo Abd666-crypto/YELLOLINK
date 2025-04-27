@@ -54,9 +54,9 @@ export default function RiderRequest() {
         role: "user"
       };
       
-      const user = await apiRequest("/api/users", {
+      const user = await apiRequest<{id: number}>("/api/users", {
         method: "POST",
-        body: JSON.stringify(userData),
+        body: userData,
       });
       
       // Request ride
@@ -70,7 +70,7 @@ export default function RiderRequest() {
       
       await apiRequest("/api/rides", {
         method: "POST",
-        body: JSON.stringify(rideData),
+        body: rideData,
       });
       
       toast({

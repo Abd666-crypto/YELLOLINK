@@ -7,23 +7,57 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+export interface RequestOptions {
+  method?: string;
+  body?: string | object;
+  headers?: Record<string, string>;
+  credentials?: RequestCredentials;
+}
 
+/**
+ * Make an API request with JSON handling
+ */
+export async function apiRequest<T = any>(
+  urlOrOptions: string | RequestOptions,
+  options?: RequestOptions
+): Promise<T> {
+  let url: string;
+  let requestOptions: RequestOptions = {
+    method: 'GET',
+    credentials: 'include',
+    headers: {}
+  };
+
+  if (typeof urlOrOptions === 'string') {
+    url = urlOrOptions;
+    if (options) {
+      requestOptions = { ...requestOptions, ...options };
+    }
+  } else {
+    throw new Error('URL must be a string');
+  }
+
+  if (requestOptions.body && typeof requestOptions.body !== 'string') {
+    requestOptions.body = JSON.stringify(requestOptions.body);
+    requestOptions.headers = {
+      ...requestOptions.headers,
+      'Content-Type': 'application/json'
+    };
+  }
+
+  const res = await fetch(url, requestOptions as RequestInit);
   await throwIfResNotOk(res);
-  return res;
+  
+  try {
+    return await res.json();
+  } catch (e) {
+    // Return empty object if no JSON response
+    return {} as T;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
