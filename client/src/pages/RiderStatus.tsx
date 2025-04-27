@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { MapPin, Car, Phone, Star, Loader2, CheckCircle2 } from "lucide-react";
+import { User, Driver, Ride } from "../../shared/schema";
 
 // Mock user ID for demo (in a real app, this would come from authentication)
 const MOCK_USER_ID = 1;
