@@ -2,6 +2,14 @@ import { pgTable, text, serial, integer, boolean, jsonb, timestamp, doublePrecis
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define subscription tiers
+export enum SubscriptionTier {
+  FREE = "free",
+  BASIC = "basic", 
+  PREMIUM = "premium",
+  BUSINESS = "business"
+}
+
 // User table - base users for the application
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -72,6 +80,19 @@ export const apiKeys = pgTable("api_keys", {
   userId: integer("user_id").references(() => users.id),
 });
 
+// Subscriptions table - for premium features
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  tier: text("tier").notNull().default(SubscriptionTier.FREE),
+  startDate: timestamp("start_date").defaultNow(),
+  endDate: timestamp("end_date"),
+  isActive: boolean("is_active").default(true),
+  autoRenew: boolean("auto_renew").default(false),
+  lastPaymentId: text("last_payment_id"),
+  lastPaymentDate: timestamp("last_payment_date"),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -122,6 +143,15 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).pick({
   userId: true,
 });
 
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).pick({
+  userId: true,
+  tier: true,
+  endDate: true,
+  autoRenew: true,
+  lastPaymentId: true,
+  lastPaymentDate: true,
+});
+
 // Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -140,3 +170,6 @@ export type Project = typeof projects.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type ApiKey = typeof apiKeys.$inferSelect;
+
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;

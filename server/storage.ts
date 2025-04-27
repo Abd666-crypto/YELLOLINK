@@ -1,9 +1,9 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
-  User, Driver, Ride, Payment, Project, ApiKey,
-  InsertUser, InsertDriver, InsertRide, InsertPayment, InsertProject, InsertApiKey,
-  users, drivers, rides, payments, projects, apiKeys
+  User, Driver, Ride, Payment, Project, ApiKey, Subscription,
+  InsertUser, InsertDriver, InsertRide, InsertPayment, InsertProject, InsertApiKey, InsertSubscription,
+  users, drivers, rides, payments, projects, apiKeys, subscriptions, SubscriptionTier
 } from "../shared/schema";
 
 export interface IStorage {
@@ -52,6 +52,13 @@ export interface IStorage {
   getAllApiKeys(): Promise<ApiKey[]>;
   getApiKey(id: number): Promise<ApiKey | undefined>;
   createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
+  
+  // Subscription methods
+  getUserSubscription(userId: number): Promise<Subscription | undefined>;
+  createSubscription(subscription: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: number, tier: string, endDate: Date): Promise<Subscription | undefined>;
+  cancelSubscription(id: number): Promise<Subscription | undefined>;
+  isUserPremium(userId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -281,6 +288,68 @@ export class DatabaseStorage implements IStorage {
   async createApiKey(insertApiKey: InsertApiKey): Promise<ApiKey> {
     const [apiKey] = await db.insert(apiKeys).values(insertApiKey).returning();
     return apiKey;
+  }
+  
+  // Subscription methods
+  async getUserSubscription(userId: number): Promise<Subscription | undefined> {
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .orderBy(desc(subscriptions.id))
+      .limit(1);
+    return subscription;
+  }
+  
+  async createSubscription(insertSubscription: InsertSubscription): Promise<Subscription> {
+    const [subscription] = await db
+      .insert(subscriptions)
+      .values(insertSubscription)
+      .returning();
+    return subscription;
+  }
+  
+  async updateSubscription(id: number, tier: string, endDate: Date): Promise<Subscription | undefined> {
+    const [updatedSubscription] = await db
+      .update(subscriptions)
+      .set({
+        tier,
+        endDate,
+        isActive: true
+      })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return updatedSubscription;
+  }
+  
+  async cancelSubscription(id: number): Promise<Subscription | undefined> {
+    const [canceledSubscription] = await db
+      .update(subscriptions)
+      .set({
+        isActive: false,
+        autoRenew: false
+      })
+      .where(eq(subscriptions.id, id))
+      .returning();
+    return canceledSubscription;
+  }
+  
+  async isUserPremium(userId: number): Promise<boolean> {
+    // Check if user has an active subscription that is not FREE tier and not expired
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.isActive, true),
+          sql`${subscriptions.tier} != '${SubscriptionTier.FREE}'`,
+          sql`(${subscriptions.endDate} IS NULL OR ${subscriptions.endDate} > NOW())`
+        )
+      )
+      .limit(1);
+    
+    return !!subscription;
   }
 }
 
