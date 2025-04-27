@@ -1,26 +1,10 @@
-import { 
-  users, 
-  projects, 
-  apiKeys,
-  drivers,
-  rides,
-  payments,
-  type User, 
-  type InsertUser, 
-  type Project, 
-  type InsertProject,
-  type ApiKey,
-  type InsertApiKey,
-  type Driver,
-  type InsertDriver,
-  type Ride,
-  type InsertRide,
-  type Payment,
-  type InsertPayment
-} from "@shared/schema";
-
-// modify the interface with any CRUD methods
-// you might need
+import { eq, and, desc, sql } from "drizzle-orm";
+import { db } from "./db";
+import {
+  User, Driver, Ride, Payment, Project, ApiKey,
+  InsertUser, InsertDriver, InsertRide, InsertPayment, InsertProject, InsertApiKey,
+  users, drivers, rides, payments, projects, apiKeys
+} from "../shared/schema";
 
 export interface IStorage {
   // User methods
@@ -70,309 +54,234 @@ export interface IStorage {
   createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private drivers: Map<number, Driver>;
-  private rides: Map<number, Ride>;
-  private payments: Map<number, Payment>;
-  private projects: Map<number, Project>;
-  private apiKeys: Map<number, ApiKey>;
-  
-  private userIdCounter: number;
-  private driverIdCounter: number;
-  private rideIdCounter: number;
-  private paymentIdCounter: number;
-  private projectIdCounter: number;
-  private apiKeyIdCounter: number;
-
-  constructor() {
-    this.users = new Map();
-    this.drivers = new Map();
-    this.rides = new Map();
-    this.payments = new Map();
-    this.projects = new Map();
-    this.apiKeys = new Map();
-    
-    this.userIdCounter = 1;
-    this.driverIdCounter = 1;
-    this.rideIdCounter = 1;
-    this.paymentIdCounter = 1;
-    this.projectIdCounter = 1;
-    this.apiKeyIdCounter = 1;
-  }
-
-  // User methods
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
-  
+
   async getUserByWalletAddress(walletAddress: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.walletAddress === walletAddress,
-    );
+    const [user] = await db.select().from(users).where(eq(users.walletAddress, walletAddress));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const user: User = { 
-      ...insertUser, 
-      id,
-      walletAddress: insertUser.walletAddress || null,
-      phoneNumber: insertUser.phoneNumber || null,
-      role: insertUser.role || "user"
-    };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
-  
-  // Driver methods
+
   async getAllDrivers(): Promise<Driver[]> {
-    return Array.from(this.drivers.values());
+    return await db.select().from(drivers);
   }
-  
+
   async getDriver(id: number): Promise<Driver | undefined> {
-    return this.drivers.get(id);
-  }
-  
-  async getDriverByUserId(userId: number): Promise<Driver | undefined> {
-    return Array.from(this.drivers.values()).find(
-      (driver) => driver.userId === userId,
-    );
-  }
-  
-  async getDriverByWalletAddress(walletAddress: string): Promise<Driver | undefined> {
-    return Array.from(this.drivers.values()).find(
-      (driver) => driver.walletAddress === walletAddress,
-    );
-  }
-  
-  async getActiveDrivers(): Promise<Driver[]> {
-    return Array.from(this.drivers.values()).filter(
-      (driver) => driver.isActive && !driver.isSuspended,
-    );
-  }
-  
-  async createDriver(insertDriver: InsertDriver): Promise<Driver> {
-    const id = this.driverIdCounter++;
-    const driver: Driver = { 
-      ...insertDriver, 
-      id,
-      totalRides: 0,
-      totalRating: 0,
-      isSuspended: false,
-      latitude: insertDriver.latitude || null,
-      longitude: insertDriver.longitude || null,
-      isActive: insertDriver.isActive || false
-    };
-    this.drivers.set(id, driver);
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, id));
     return driver;
   }
-  
+
+  async getDriverByUserId(userId: number): Promise<Driver | undefined> {
+    const [driver] = await db.select().from(drivers).where(eq(drivers.userId, userId));
+    return driver;
+  }
+
+  async getDriverByWalletAddress(walletAddress: string): Promise<Driver | undefined> {
+    const [driver] = await db.select().from(drivers).where(eq(drivers.walletAddress, walletAddress));
+    return driver;
+  }
+
+  async getActiveDrivers(): Promise<Driver[]> {
+    return await db.select().from(drivers).where(eq(drivers.isActive, true));
+  }
+
+  async createDriver(insertDriver: InsertDriver): Promise<Driver> {
+    const [driver] = await db.insert(drivers).values(insertDriver).returning();
+    return driver;
+  }
+
   async updateDriverStatus(id: number, isActive: boolean): Promise<Driver | undefined> {
-    const driver = this.drivers.get(id);
-    if (!driver) return undefined;
-    
-    const updatedDriver = { ...driver, isActive };
-    this.drivers.set(id, updatedDriver);
+    const [updatedDriver] = await db
+      .update(drivers)
+      .set({ isActive })
+      .where(eq(drivers.id, id))
+      .returning();
     return updatedDriver;
   }
-  
+
   async updateDriverLocation(id: number, latitude: number, longitude: number): Promise<Driver | undefined> {
-    const driver = this.drivers.get(id);
-    if (!driver) return undefined;
-    
-    const updatedDriver = { ...driver, latitude, longitude };
-    this.drivers.set(id, updatedDriver);
+    const [updatedDriver] = await db
+      .update(drivers)
+      .set({ latitude, longitude })
+      .where(eq(drivers.id, id))
+      .returning();
     return updatedDriver;
   }
-  
-  // Ride methods
+
   async getAllRides(): Promise<Ride[]> {
-    return Array.from(this.rides.values());
+    return await db.select().from(rides);
   }
-  
+
   async getRide(id: number): Promise<Ride | undefined> {
-    return this.rides.get(id);
-  }
-  
-  async getRidesByRiderId(riderId: number): Promise<Ride[]> {
-    return Array.from(this.rides.values()).filter(
-      (ride) => ride.riderId === riderId,
-    );
-  }
-  
-  async getRidesByDriverId(driverId: number): Promise<Ride[]> {
-    return Array.from(this.rides.values()).filter(
-      (ride) => ride.driverId === driverId,
-    );
-  }
-  
-  async getActiveRideByRiderId(riderId: number): Promise<Ride | undefined> {
-    return Array.from(this.rides.values()).find(
-      (ride) => ride.riderId === riderId && (ride.status === "requested" || ride.status === "assigned"),
-    );
-  }
-  
-  async getActiveRideByDriverId(driverId: number): Promise<Ride | undefined> {
-    return Array.from(this.rides.values()).find(
-      (ride) => ride.driverId === driverId && ride.status === "assigned",
-    );
-  }
-  
-  async createRide(insertRide: InsertRide): Promise<Ride> {
-    const id = this.rideIdCounter++;
-    const ride: Ride = { 
-      ...insertRide, 
-      id, 
-      driverId: insertRide.driverId || null,
-      dropoffLocation: insertRide.dropoffLocation || null,
-      status: insertRide.status || "requested",
-      requestTime: new Date(),
-      completionTime: null,
-      rating: null
-    };
-    this.rides.set(id, ride);
+    const [ride] = await db.select().from(rides).where(eq(rides.id, id));
     return ride;
   }
-  
+
+  async getRidesByRiderId(riderId: number): Promise<Ride[]> {
+    return await db.select().from(rides).where(eq(rides.riderId, riderId));
+  }
+
+  async getRidesByDriverId(driverId: number): Promise<Ride[]> {
+    return await db.select().from(rides).where(eq(rides.driverId, driverId));
+  }
+
+  async getActiveRideByRiderId(riderId: number): Promise<Ride | undefined> {
+    const [ride] = await db
+      .select()
+      .from(rides)
+      .where(
+        and(
+          eq(rides.riderId, riderId),
+          sql`${rides.status} IN ('requested', 'assigned')`
+        )
+      );
+    return ride;
+  }
+
+  async getActiveRideByDriverId(driverId: number): Promise<Ride | undefined> {
+    const [ride] = await db
+      .select()
+      .from(rides)
+      .where(
+        and(
+          eq(rides.driverId, driverId),
+          eq(rides.status, 'assigned')
+        )
+      );
+    return ride;
+  }
+
+  async createRide(insertRide: InsertRide): Promise<Ride> {
+    const [ride] = await db.insert(rides).values(insertRide).returning();
+    return ride;
+  }
+
   async updateRideStatus(id: number, status: string): Promise<Ride | undefined> {
-    const ride = this.rides.get(id);
-    if (!ride) return undefined;
-    
-    const updatedRide = { ...ride, status };
-    this.rides.set(id, updatedRide);
+    const [updatedRide] = await db
+      .update(rides)
+      .set({ status })
+      .where(eq(rides.id, id))
+      .returning();
     return updatedRide;
   }
-  
+
   async assignDriver(id: number, driverId: number): Promise<Ride | undefined> {
-    const ride = this.rides.get(id);
-    if (!ride) return undefined;
-    
-    const updatedRide = { ...ride, driverId, status: "assigned" };
-    this.rides.set(id, updatedRide);
+    const [updatedRide] = await db
+      .update(rides)
+      .set({
+        driverId,
+        status: 'assigned'
+      })
+      .where(eq(rides.id, id))
+      .returning();
     return updatedRide;
   }
-  
+
   async completeRide(id: number, rating: number): Promise<Ride | undefined> {
-    const ride = this.rides.get(id);
-    if (!ride || !ride.driverId) return undefined;
+    const [updatedRide] = await db
+      .update(rides)
+      .set({
+        rating,
+        status: 'completed',
+        completionTime: new Date()
+      })
+      .where(eq(rides.id, id))
+      .returning();
     
-    // Update ride
-    const updatedRide = { 
-      ...ride, 
-      status: "completed", 
-      rating, 
-      completionTime: new Date() 
-    };
-    this.rides.set(id, updatedRide);
-    
-    // Update driver stats
-    const driver = this.drivers.get(ride.driverId);
-    if (driver) {
-      const currentRides = driver.totalRides || 0;
-      const currentRating = driver.totalRating || 0;
-      
-      const updatedDriver = { 
-        ...driver, 
-        totalRides: currentRides + 1,
-        totalRating: currentRating + rating 
-      };
-      this.drivers.set(driver.id, updatedDriver);
+    // Also update driver's total rides and rating
+    if (updatedRide && updatedRide.driverId) {
+      const driver = await this.getDriver(updatedRide.driverId);
+      if (driver) {
+        const totalRides = (driver.totalRides || 0) + 1;
+        const totalRating = (driver.totalRating || 0) + rating;
+        
+        await db
+          .update(drivers)
+          .set({
+            totalRides,
+            totalRating
+          })
+          .where(eq(drivers.id, updatedRide.driverId));
+      }
     }
     
     return updatedRide;
   }
-  
-  // Payment methods
+
   async getAllPayments(): Promise<Payment[]> {
-    return Array.from(this.payments.values());
+    return await db.select().from(payments);
   }
-  
+
   async getPayment(id: number): Promise<Payment | undefined> {
-    return this.payments.get(id);
-  }
-  
-  async getPaymentByMomoTxId(momoTxId: string): Promise<Payment | undefined> {
-    return Array.from(this.payments.values()).find(
-      (payment) => payment.momoTxId === momoTxId,
-    );
-  }
-  
-  async getPaymentsByRideId(rideId: number): Promise<Payment[]> {
-    return Array.from(this.payments.values()).filter(
-      (payment) => payment.rideId === rideId,
-    );
-  }
-  
-  async createPayment(insertPayment: InsertPayment): Promise<Payment> {
-    const id = this.paymentIdCounter++;
-    const payment: Payment = { 
-      ...insertPayment, 
-      id,
-      status: insertPayment.status || "pending",
-      timestamp: new Date() 
-    };
-    this.payments.set(id, payment);
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
     return payment;
   }
-  
+
+  async getPaymentByMomoTxId(momoTxId: string): Promise<Payment | undefined> {
+    const [payment] = await db.select().from(payments).where(eq(payments.momoTxId, momoTxId));
+    return payment;
+  }
+
+  async getPaymentsByRideId(rideId: number): Promise<Payment[]> {
+    return await db.select().from(payments).where(eq(payments.rideId, rideId));
+  }
+
+  async createPayment(insertPayment: InsertPayment): Promise<Payment> {
+    const [payment] = await db.insert(payments).values(insertPayment).returning();
+    return payment;
+  }
+
   async updatePaymentStatus(id: number, status: string): Promise<Payment | undefined> {
-    const payment = this.payments.get(id);
-    if (!payment) return undefined;
-    
-    const updatedPayment = { ...payment, status };
-    this.payments.set(id, updatedPayment);
+    const [updatedPayment] = await db
+      .update(payments)
+      .set({ status })
+      .where(eq(payments.id, id))
+      .returning();
     return updatedPayment;
   }
-  
-  // Project methods - legacy
+
+  // Legacy Project methods
   async getAllProjects(): Promise<Project[]> {
-    return Array.from(this.projects.values());
+    return await db.select().from(projects);
   }
-  
+
   async getProject(id: number): Promise<Project | undefined> {
-    return this.projects.get(id);
-  }
-  
-  async createProject(insertProject: InsertProject): Promise<Project> {
-    const id = this.projectIdCounter++;
-    const project: Project = { 
-      ...insertProject, 
-      id,
-      userId: insertProject.userId || null,
-      description: insertProject.description || null,
-      lastRun: null,
-      dataPoints: 0
-    };
-    this.projects.set(id, project);
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
     return project;
   }
-  
-  // ApiKey methods
+
+  async createProject(insertProject: InsertProject): Promise<Project> {
+    const [project] = await db.insert(projects).values(insertProject).returning();
+    return project;
+  }
+
+  // API Key methods
   async getAllApiKeys(): Promise<ApiKey[]> {
-    return Array.from(this.apiKeys.values());
+    return await db.select().from(apiKeys);
   }
-  
+
   async getApiKey(id: number): Promise<ApiKey | undefined> {
-    return this.apiKeys.get(id);
+    const [apiKey] = await db.select().from(apiKeys).where(eq(apiKeys.id, id));
+    return apiKey;
   }
-  
+
   async createApiKey(insertApiKey: InsertApiKey): Promise<ApiKey> {
-    const id = this.apiKeyIdCounter++;
-    const apiKey: ApiKey = { 
-      ...insertApiKey, 
-      id,
-      userId: insertApiKey.userId || null
-    };
-    this.apiKeys.set(id, apiKey);
+    const [apiKey] = await db.insert(apiKeys).values(insertApiKey).returning();
     return apiKey;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
