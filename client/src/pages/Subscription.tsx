@@ -88,14 +88,14 @@ export default function Subscription() {
   const { data: subscription, isLoading: isLoadingSubscription } = useQuery({
     queryKey: ['/api/users', userId, 'subscription'],
     queryFn: () => apiRequest(`/api/users/${userId}/subscription`),
-    on401: 'returnNull'
+    retry: false
   });
   
   // Fetch premium status
   const { data: premiumStatus } = useQuery({
     queryKey: ['/api/users', userId, 'premium-status'],
     queryFn: () => apiRequest(`/api/users/${userId}/premium-status`),
-    on401: 'returnNull'
+    retry: false
   });
   
   // Create subscription mutation
@@ -206,7 +206,7 @@ export default function Subscription() {
   
   // Redirect if no user ID is provided
   if (!userId) {
-    navigate('/');
+    setLocation('/');
     return null;
   }
   

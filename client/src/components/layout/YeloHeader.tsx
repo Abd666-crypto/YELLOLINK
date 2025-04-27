@@ -96,6 +96,13 @@ export default function YeloHeader() {
                 Contact
               </span>
             </Link>
+            <Link href="/subscription/1">
+              <span className={`text-sm font-medium transition-colors px-3 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 ${
+                isActive("/subscription/1") ? "bg-amber-200 font-semibold" : ""
+              }`}>
+                ✨ Premium
+              </span>
+            </Link>
           </nav>
 
           {/* Authentication Button */}
@@ -171,6 +178,14 @@ export default function YeloHeader() {
               </Link>
               <Link href="#contact" onClick={() => setMobileMenuOpen(false)}>
                 <span className="block py-2">Contact</span>
+              </Link>
+              <div className="py-1 border-t"></div>
+              <Link href="/subscription/1" onClick={() => setMobileMenuOpen(false)}>
+                <span className={`block py-2 px-3 my-2 bg-amber-100 text-amber-800 rounded-md ${
+                  isActive("/subscription/1") ? "bg-amber-200 font-semibold" : ""
+                }`}>
+                  ✨ Premium Plans
+                </span>
               </Link>
               <div className="pt-4">
                 <Button className="w-full bg-gradient-to-r from-yellow-500 to-green-600 hover:from-yellow-600 hover:to-green-700 text-white">
