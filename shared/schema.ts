@@ -1,41 +1,69 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// User table - base users for the application
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  walletAddress: text("wallet_address"),
+  phoneNumber: text("phone_number"),
+  role: text("role").default("user"), // user, driver, admin
 });
 
+// Drivers table - users who are registered as drivers
+export const drivers = pgTable("drivers", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  licensePlate: text("license_plate").notNull(),
+  walletAddress: text("wallet_address").notNull(),
+  totalRides: integer("total_rides").default(0),
+  totalRating: integer("total_rating").default(0),
+  isSuspended: boolean("is_suspended").default(false),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  isActive: boolean("is_active").default(false),
+});
+
+// Rides table - ride requests and details
+export const rides = pgTable("rides", {
+  id: serial("id").primaryKey(),
+  riderId: integer("rider_id").references(() => users.id).notNull(),
+  driverId: integer("driver_id").references(() => drivers.id),
+  pickupLocation: text("pickup_location").notNull(),
+  dropoffLocation: text("dropoff_location"),
+  status: text("status").notNull().default("requested"), // requested, assigned, completed, cancelled
+  fare: integer("fare").notNull(),
+  momoTxId: text("momo_tx_id").notNull(),
+  rating: integer("rating"),
+  requestTime: timestamp("request_time").defaultNow(),
+  completionTime: timestamp("completion_time"),
+});
+
+// Payments table - record of payments made through MoMo
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  rideId: integer("ride_id").references(() => rides.id).notNull(),
+  momoTxId: text("momo_tx_id").notNull().unique(),
+  amount: integer("amount").notNull(),
+  status: text("status").notNull().default("pending"), // pending, completed, refunded
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// Projects table - keeping this for backward compatibility
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  type: text("type").notNull(),
+  type: text("type").notNull(), 
   status: text("status").notNull(),
   lastRun: timestamp("last_run"),
   dataPoints: integer("data_points").default(0),
   userId: integer("user_id").references(() => users.id),
 });
 
-export const dataSources = pgTable("data_sources", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  sourceType: text("source_type").notNull(),
-  configuration: jsonb("configuration").notNull(),
-  projectId: integer("project_id").references(() => projects.id),
-});
-
-export const dataNodes = pgTable("data_nodes", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  nodeType: text("node_type").notNull(),
-  configuration: jsonb("configuration").notNull(),
-  position: jsonb("position").notNull(),
-  projectId: integer("project_id").references(() => projects.id),
-});
-
+// API Keys table - for accessing the YeloLink API
 export const apiKeys = pgTable("api_keys", {
   id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),
@@ -48,6 +76,35 @@ export const apiKeys = pgTable("api_keys", {
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  walletAddress: true,
+  phoneNumber: true,
+  role: true,
+});
+
+export const insertDriverSchema = createInsertSchema(drivers).pick({
+  userId: true,
+  licensePlate: true,
+  walletAddress: true,
+  latitude: true,
+  longitude: true,
+  isActive: true,
+});
+
+export const insertRideSchema = createInsertSchema(rides).pick({
+  riderId: true,
+  driverId: true,
+  pickupLocation: true,
+  dropoffLocation: true,
+  status: true,
+  fare: true,
+  momoTxId: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).pick({
+  rideId: true,
+  momoTxId: true,
+  amount: true,
+  status: true,
 });
 
 export const insertProjectSchema = createInsertSchema(projects).pick({
@@ -56,21 +113,6 @@ export const insertProjectSchema = createInsertSchema(projects).pick({
   type: true,
   status: true,
   userId: true,
-});
-
-export const insertDataSourceSchema = createInsertSchema(dataSources).pick({
-  name: true,
-  sourceType: true,
-  configuration: true,
-  projectId: true,
-});
-
-export const insertDataNodeSchema = createInsertSchema(dataNodes).pick({
-  name: true,
-  nodeType: true,
-  configuration: true,
-  position: true,
-  projectId: true,
 });
 
 export const insertApiKeySchema = createInsertSchema(apiKeys).pick({
@@ -84,14 +126,17 @@ export const insertApiKeySchema = createInsertSchema(apiKeys).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+export type InsertDriver = z.infer<typeof insertDriverSchema>;
+export type Driver = typeof drivers.$inferSelect;
+
+export type InsertRide = z.infer<typeof insertRideSchema>;
+export type Ride = typeof rides.$inferSelect;
+
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
+
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
-
-export type InsertDataSource = z.infer<typeof insertDataSourceSchema>;
-export type DataSource = typeof dataSources.$inferSelect;
-
-export type InsertDataNode = z.infer<typeof insertDataNodeSchema>;
-export type DataNode = typeof dataNodes.$inferSelect;
 
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type ApiKey = typeof apiKeys.$inferSelect;
