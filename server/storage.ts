@@ -275,10 +275,13 @@ export class MemStorage implements IStorage {
     // Update driver stats
     const driver = this.drivers.get(ride.driverId);
     if (driver) {
+      const currentRides = driver.totalRides || 0;
+      const currentRating = driver.totalRating || 0;
+      
       const updatedDriver = { 
         ...driver, 
-        totalRides: driver.totalRides + 1,
-        totalRating: driver.totalRating + rating 
+        totalRides: currentRides + 1,
+        totalRating: currentRating + rating 
       };
       this.drivers.set(driver.id, updatedDriver);
     }
@@ -342,8 +345,10 @@ export class MemStorage implements IStorage {
     const project: Project = { 
       ...insertProject, 
       id,
-      lastRun: insertProject.lastRun || null,
-      dataPoints: insertProject.dataPoints || 0
+      userId: insertProject.userId || null,
+      description: insertProject.description || null,
+      lastRun: null,
+      dataPoints: 0
     };
     this.projects.set(id, project);
     return project;
@@ -360,7 +365,11 @@ export class MemStorage implements IStorage {
   
   async createApiKey(insertApiKey: InsertApiKey): Promise<ApiKey> {
     const id = this.apiKeyIdCounter++;
-    const apiKey: ApiKey = { ...insertApiKey, id };
+    const apiKey: ApiKey = { 
+      ...insertApiKey, 
+      id,
+      userId: insertApiKey.userId || null
+    };
     this.apiKeys.set(id, apiKey);
     return apiKey;
   }
