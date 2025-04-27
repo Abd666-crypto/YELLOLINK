@@ -10,6 +10,13 @@ import {
   insertApiKeySchema
 } from "@shared/schema";
 
+import { WebSocketServer, WebSocket } from 'ws';
+
+// Store active connections by user type and ID
+const connections: {
+  [key: string]: WebSocket
+} = {};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // ======= YeloLink API Routes =======
   
@@ -413,5 +420,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket server for real-time location updates
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  wss.on('connection', (ws: WebSocket) => {
+    console.log('New WebSocket connection established');
+    
+    // Register connection type (rider or driver)
+    ws.on('message', (message: string) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        // Register the connection
+        if (data.type === 'register') {
+          const connectionId = `${data.userType}:${data.userId}`;
+          connections[connectionId] = ws;
+          console.log(`Registered ${connectionId}`);
+          
+          ws.send(JSON.stringify({ type: 'register_success' }));
+        }
+        
+        // Handle location updates from driver
+        if (data.type === 'location_update' && data.userType === 'driver') {
+          const driverId = data.userId;
+          const { latitude, longitude } = data;
+          
+          // Save location to database
+          storage.updateDriverLocation(driverId, latitude, longitude)
+            .then(driver => {
+              console.log(`Updated location for driver ${driverId}`);
+              
+              // Forward location update to all active riders for this driver
+              storage.getAllRides().then(rides => {
+                const activeRides = rides.filter(ride => 
+                  ride.status === 'assigned' && ride.driverId === driverId
+                );
+                
+                activeRides.forEach(ride => {
+                  const riderConnectionId = `rider:${ride.riderId}`;
+                  const riderWs = connections[riderConnectionId];
+                  
+                  if (riderWs && riderWs.readyState === WebSocket.OPEN) {
+                    riderWs.send(JSON.stringify({
+                      type: 'driver_location',
+                      driverId,
+                      latitude,
+                      longitude,
+                      rideId: ride.id
+                    }));
+                  }
+                });
+              });
+            })
+            .catch(err => {
+              console.error('Error updating driver location:', err);
+            });
+        }
+      } catch (err) {
+        console.error('Error processing WebSocket message:', err);
+      }
+    });
+    
+    // Handle disconnect
+    ws.on('close', () => {
+      console.log('WebSocket connection closed');
+      // Remove connection from the connections object
+      Object.keys(connections).forEach(key => {
+        if (connections[key] === ws) {
+          delete connections[key];
+          console.log(`Unregistered ${key}`);
+        }
+      });
+    });
+  });
+  
   return httpServer;
 }

@@ -1,107 +1,185 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { Menu, X, ChevronDown, Car, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Car, Menu, User, MapPin, DollarSign } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function YeloHeader() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [location] = useLocation();
-  
-  // Navigation links
-  const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/rider-request", label: "Request Ride" },
-    { href: "/rider-status", label: "Ride Status" },
-    { href: "/driver-register", label: "Become a Driver" },
-  ];
-  
+
+  const isActive = (path: string) => location === path;
+
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center">
-        <div className="mr-4 flex">
-          <Link href="/" className="flex items-center space-x-2">
-            <Car className="h-6 w-6 text-primary" />
-            <span className="font-bold text-xl yelo-text-gradient">YeloLink</span>
-          </Link>
-        </div>
-        
-        {/* Mobile menu trigger */}
-        <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger asChild className="md:hidden">
-            <Button variant="ghost" size="icon" className="mr-2">
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Toggle menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="pr-0">
-            <div className="px-7">
-              <Link href="/" className="flex items-center space-x-2" onClick={() => setIsOpen(false)}>
-                <Car className="h-6 w-6 text-primary" />
-                <span className="font-bold text-xl">YeloLink</span>
-              </Link>
-              <nav className="flex flex-col gap-4 mt-8">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`flex items-center text-base ${
-                      location === link.href
-                        ? "font-semibold text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    {link.label}
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container py-3 px-4 mx-auto">
+        <div className="flex items-center justify-between">
+          {/* Logo and Brand */}
+          <div className="flex items-center">
+            <Link href="/" className="flex items-center">
+              <span className="font-bold text-2xl bg-gradient-to-r from-yellow-500 to-green-600 bg-clip-text text-transparent">
+                YeloLink
+              </span>
+              <span className="ml-2 text-xs text-muted-foreground hidden md:block">
+                Tamale's Ride-Sharing Platform
+              </span>
+            </Link>
+          </div>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-6">
+            <Link href="/">
+              <span className={`text-sm font-medium hover:text-primary transition-colors ${
+                isActive("/") ? "text-primary" : "text-muted-foreground"
+              }`}>
+                Home
+              </span>
+            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="text-sm font-medium flex items-center gap-1 focus:ring-0">
+                  <User className="h-4 w-4 mr-1" />
+                  Riders
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/rider-request" className="w-full cursor-pointer">
+                    Request a Ride
                   </Link>
-                ))}
-                <Link 
-                  href="/driver-dashboard" 
-                  className="flex items-center py-2 px-4 bg-primary/10 rounded-md text-primary"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Car className="mr-2 h-5 w-5" />
-                  Driver Dashboard
-                </Link>
-              </nav>
-            </div>
-          </SheetContent>
-        </Sheet>
-        
-        {/* Desktop navigation */}
-        <nav className="flex-1 hidden md:flex items-center space-x-6 justify-center">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm font-medium transition-colors hover:text-foreground ${
-                location === link.href
-                  ? "text-foreground"
-                  : "text-muted-foreground"
-              }`}
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/rider-status" className="w-full cursor-pointer">
+                    Check Ride Status
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="text-sm font-medium flex items-center gap-1 focus:ring-0">
+                  <Car className="h-4 w-4 mr-1" />
+                  Drivers
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/driver-register" className="w-full cursor-pointer">
+                    Register as Driver
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/driver-dashboard" className="w-full cursor-pointer">
+                    Driver Dashboard
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Link href="#about">
+              <span className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+                About
+              </span>
+            </Link>
+            <Link href="#contact">
+              <span className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+                Contact
+              </span>
+            </Link>
+          </nav>
+
+          {/* Authentication Button */}
+          <div className="hidden md:block">
+            <Button className="bg-gradient-to-r from-yellow-500 to-green-600 hover:from-yellow-600 hover:to-green-700 text-white">
+              Log In / Sign Up
+            </Button>
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Toggle Menu"
+              onClick={toggleMobileMenu}
             >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-        
-        {/* Right side buttons */}
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" asChild className="hidden md:flex">
-            <Link href="/driver-dashboard">
-              <Car className="mr-2 h-4 w-4" />
-              Driver Dashboard
-            </Link>
-          </Button>
-          
-          <Button className="hidden sm:flex yelo-gradient">
-            <Link href="/rider-request">
-              <MapPin className="mr-2 h-4 w-4" />
-              Request a Ride
-            </Link>
-          </Button>
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden py-4">
+            <nav className="flex flex-col space-y-4">
+              <Link href="/" onClick={() => setMobileMenuOpen(false)}>
+                <span className={`block py-2 ${
+                  isActive("/") ? "text-primary" : "text-foreground"
+                }`}>
+                  Home
+                </span>
+              </Link>
+              <div className="py-1 border-t"></div>
+              <span className="text-sm font-medium text-muted-foreground">Riders</span>
+              <Link href="/rider-request" onClick={() => setMobileMenuOpen(false)}>
+                <span className={`block py-2 pl-4 ${
+                  isActive("/rider-request") ? "text-primary" : "text-foreground"
+                }`}>
+                  Request a Ride
+                </span>
+              </Link>
+              <Link href="/rider-status" onClick={() => setMobileMenuOpen(false)}>
+                <span className={`block py-2 pl-4 ${
+                  isActive("/rider-status") ? "text-primary" : "text-foreground"
+                }`}>
+                  Check Ride Status
+                </span>
+              </Link>
+              <div className="py-1 border-t"></div>
+              <span className="text-sm font-medium text-muted-foreground">Drivers</span>
+              <Link href="/driver-register" onClick={() => setMobileMenuOpen(false)}>
+                <span className={`block py-2 pl-4 ${
+                  isActive("/driver-register") ? "text-primary" : "text-foreground"
+                }`}>
+                  Register as Driver
+                </span>
+              </Link>
+              <Link href="/driver-dashboard" onClick={() => setMobileMenuOpen(false)}>
+                <span className={`block py-2 pl-4 ${
+                  isActive("/driver-dashboard") ? "text-primary" : "text-foreground"
+                }`}>
+                  Driver Dashboard
+                </span>
+              </Link>
+              <div className="py-1 border-t"></div>
+              <Link href="#about" onClick={() => setMobileMenuOpen(false)}>
+                <span className="block py-2">About</span>
+              </Link>
+              <Link href="#contact" onClick={() => setMobileMenuOpen(false)}>
+                <span className="block py-2">Contact</span>
+              </Link>
+              <div className="pt-4">
+                <Button className="w-full bg-gradient-to-r from-yellow-500 to-green-600 hover:from-yellow-600 hover:to-green-700 text-white">
+                  Log In / Sign Up
+                </Button>
+              </div>
+            </nav>
+          </div>
+        )}
       </div>
     </header>
   );
