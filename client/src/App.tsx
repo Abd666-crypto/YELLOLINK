@@ -12,6 +12,7 @@ import RiderRequest from "@/pages/RiderRequest";
 import RiderStatus from "@/pages/RiderStatus";
 import DriverRegister from "@/pages/DriverRegister";
 import DriverDashboard from "@/pages/DriverDashboard";
+import Subscription from "@/pages/Subscription";
 
 // Import previous data analytics pages (will be legacy pages)
 import Dashboard from "@/pages/Dashboard";
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/rider-status" component={RiderStatus} />
       <Route path="/driver-register" component={DriverRegister} />
       <Route path="/driver-dashboard" component={DriverDashboard} />
+      <Route path="/subscription/:userId" component={Subscription} />
       
       {/* Legacy Data Analytics Pages */}
       <Route path="/legacy/dashboard" component={Dashboard} />

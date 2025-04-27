@@ -7,7 +7,9 @@ import {
   insertRideSchema,
   insertPaymentSchema,
   insertProjectSchema,
-  insertApiKeySchema
+  insertApiKeySchema,
+  insertSubscriptionSchema,
+  SubscriptionTier
 } from "@shared/schema";
 
 import { WebSocketServer, WebSocket } from 'ws';
@@ -416,6 +418,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(newApiKey);
     } catch (error) {
       res.status(500).json({ message: "Failed to create API key" });
+    }
+  });
+  
+  // Subscription routes
+  app.get("/api/users/:userId/subscription", async (req, res) => {
+    try {
+      const subscription = await storage.getUserSubscription(parseInt(req.params.userId));
+      if (!subscription) {
+        return res.status(404).json({ message: "No subscription found for this user" });
+      }
+      res.json(subscription);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch user subscription" });
+    }
+  });
+  
+  app.post("/api/subscriptions", async (req, res) => {
+    try {
+      const validation = insertSubscriptionSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid subscription data", errors: validation.error.format() });
+      }
+
+      const newSubscription = await storage.createSubscription(validation.data);
+      res.status(201).json(newSubscription);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create subscription" });
+    }
+  });
+  
+  app.put("/api/subscriptions/:id", async (req, res) => {
+    try {
+      const { tier, endDate } = req.body;
+      if (!tier || !endDate) {
+        return res.status(400).json({ message: "Tier and end date are required" });
+      }
+
+      const updatedSubscription = await storage.updateSubscription(
+        parseInt(req.params.id), 
+        tier, 
+        new Date(endDate)
+      );
+      
+      if (!updatedSubscription) {
+        return res.status(404).json({ message: "Subscription not found" });
+      }
+      
+      res.json(updatedSubscription);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update subscription" });
+    }
+  });
+  
+  app.delete("/api/subscriptions/:id", async (req, res) => {
+    try {
+      const canceledSubscription = await storage.cancelSubscription(parseInt(req.params.id));
+      if (!canceledSubscription) {
+        return res.status(404).json({ message: "Subscription not found" });
+      }
+      res.json(canceledSubscription);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to cancel subscription" });
+    }
+  });
+  
+  app.get("/api/users/:userId/premium-status", async (req, res) => {
+    try {
+      const isPremium = await storage.isUserPremium(parseInt(req.params.userId));
+      res.json({ isPremium });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check premium status" });
     }
   });
 
