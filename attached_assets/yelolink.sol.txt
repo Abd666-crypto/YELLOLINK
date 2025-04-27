@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract YeloLink {
+    struct Ride {
+        address rider;
+        string pickup;
+        string momoTxId;
+        uint256 fare;
+        bool completed;
+        address driver;
+    }
+
+    struct Driver {
+        address driverAddress;
+        uint256 totalRides;
+        uint256 ratingSum;
+        string licensePlate;
+        bool isSuspended;
+    }
+
+    mapping(address => Ride) public activeRides;
+    mapping(address => Driver) public drivers;
+    mapping(string => bool) public usedMomoTxIds;
+    mapping(bytes32 => address[]) public disputeVotes;
+
+    event RideRequested(address indexed rider, string momoTxId);
+    event RideAssigned(address indexed rider, address indexed driver);
+    event RideCompleted(address indexed rider, uint256 rating);
+    event DisputeRaised(address indexed rider, bytes32 disputeId);
+
+    modifier onlyDriver() {
+        require(drivers[msg.sender].driverAddress == msg.sender, "Not a driver");
+        _;
+    }
+
+    function registerDriver(string memory _licensePlate) external {
+        require(drivers[msg.sender].driverAddress == address(0), "Already registered");
+        drivers[msg.sender] = Driver(msg.sender, 0, 0, _licensePlate, false);
+    }
+
+    function requestRide(string memory _pickup, string memory _momoTxId, uint256 _fare) external {
+        require(!usedMomoTxIds[_momoTxId], "Duplicate MoMo TX");
+        activeRides[msg.sender] = Ride(msg.sender, _pickup, _momoTxId, _fare, false, address(0));
+        usedMomoTxIds[_momoTxId] = true;
+        emit RideRequested(msg.sender, _momoTxId);
+    }
+
+    function assignDriver(address _rider, address _driver) external onlyDriver {
+        require(activeRides[_rider].driver == address(0), "Ride already assigned");
+        activeRides[_rider].driver = _driver;
+        emit RideAssigned(_rider, _driver);
+    }
+
+    function completeRide(address _rider, uint256 _rating) external onlyDriver {
+        require(activeRides[_rider].driver == msg.sender, "Not assigned driver");
+        require(_rating <= 5, "Invalid rating");
+
+        Driver storage driver = drivers[msg.sender];
+        driver.ratingSum += _rating;
+        driver.totalRides++;
+        
+        activeRides[_rider].completed = true;
+        emit RideCompleted(_rider, _rating);
+    }
+
+    function raiseDispute(address _rider) external {
+        bytes32 disputeId = keccak256(abi.encodePacked(_rider, block.timestamp));
+        disputeVotes[disputeId] = new address[](0);
+        emit DisputeRaised(_rider, disputeId);
+    }
+}
