@@ -229,4 +229,73 @@ export class AIService {
     
     return penalty;
   }
+  
+  /**
+   * Calculates an affordable fare based on distance, optimized for Tamale market
+   * @param pickupLatitude Pickup location latitude
+   * @param pickupLongitude Pickup location longitude
+   * @param dropoffLatitude Dropoff location latitude
+   * @param dropoffLongitude Dropoff location longitude
+   * @param isPremium Whether the user has a premium subscription
+   * @param rideCount Number of rides taken by the user
+   * @returns Fare in Ghana Cedis (GHS)
+   */
+  static calculateAffordableFare(
+    pickupLatitude: number,
+    pickupLongitude: number,
+    dropoffLatitude: number,
+    dropoffLongitude: number,
+    isPremium: boolean = false,
+    rideCount: number = 0
+  ): {
+    baseFare: number;
+    distanceFare: number;
+    discountAmount: number;
+    finalFare: number;
+    distance: number;
+  } {
+    // Calculate distance between points
+    const distanceKm = this.calculateDistance(
+      pickupLatitude,
+      pickupLongitude,
+      dropoffLatitude,
+      dropoffLongitude
+    );
+    
+    // Base fare values optimized for Tamale's economy
+    const baseFare = 5; // 5 Ghana Cedis base fare
+    
+    // Per-kilometer rate that decreases with distance to keep longer trips affordable
+    // Uses a degressive rate: first 3km at 2/km, next 5km at 1.5/km, beyond that 1/km
+    let distanceFare = 0;
+    
+    if (distanceKm <= 3) {
+      // First 3 km
+      distanceFare = distanceKm * 2;
+    } else if (distanceKm <= 8) {
+      // First 3 km at 2/km, then remaining at 1.5/km
+      distanceFare = 3 * 2 + (distanceKm - 3) * 1.5;
+    } else {
+      // First 3 km at 2/km, next 5 km at 1.5/km, remainder at 1/km
+      distanceFare = 3 * 2 + 5 * 1.5 + (distanceKm - 8) * 1;
+    }
+    
+    // Total pre-discount fare
+    const totalPreDiscount = baseFare + distanceFare;
+    
+    // Calculate discount percentage
+    const discountPercentage = this.calculateDiscount(0, rideCount, isPremium);
+    
+    // Apply discount
+    const discountAmount = (totalPreDiscount * discountPercentage) / 100;
+    const finalFare = Math.max(5, Math.round(totalPreDiscount - discountAmount));
+    
+    return {
+      baseFare,
+      distanceFare: Math.round(distanceFare * 10) / 10, // Round to 1 decimal place
+      discountAmount: Math.round(discountAmount * 10) / 10, // Round to 1 decimal place
+      finalFare,
+      distance: Math.round(distanceKm * 10) / 10 // Round to 1 decimal place
+    };
+  }
 }

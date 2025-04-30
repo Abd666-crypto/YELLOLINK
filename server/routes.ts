@@ -585,6 +585,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Calculate affordable fare based on distance
+  app.post("/api/ai/calculate-fare", async (req, res) => {
+    try {
+      const { 
+        pickupLatitude, 
+        pickupLongitude, 
+        dropoffLatitude, 
+        dropoffLongitude,
+        userId 
+      } = req.body;
+      
+      // Validate coordinates
+      if (
+        typeof pickupLatitude !== 'number' || 
+        typeof pickupLongitude !== 'number' || 
+        typeof dropoffLatitude !== 'number' || 
+        typeof dropoffLongitude !== 'number'
+      ) {
+        return res.status(400).json({ 
+          message: "Invalid coordinates. All latitude/longitude values must be numbers." 
+        });
+      }
+      
+      let isPremium = false;
+      let rideCount = 0;
+      
+      // If userId is provided, get additional information for better pricing
+      if (userId) {
+        try {
+          // Check premium status
+          isPremium = await storage.isUserPremium(userId);
+          
+          // Get ride count
+          const rides = await storage.getRidesByRiderId(userId);
+          rideCount = rides.length;
+        } catch (error) {
+          console.warn("Could not fetch user data for fare calculation:", error);
+          // Continue with default values
+        }
+      }
+      
+      // Calculate the fare
+      const fareDetails = AIService.calculateAffordableFare(
+        pickupLatitude,
+        pickupLongitude,
+        dropoffLatitude,
+        dropoffLongitude,
+        isPremium,
+        rideCount
+      );
+      
+      // Return fare details
+      res.json({
+        ...fareDetails,
+        currency: "GHS",
+        isPremium,
+        rideCount,
+        discountPercentage: AIService.calculateDiscount(userId || 0, rideCount, isPremium)
+      });
+    } catch (error) {
+      console.error("Error calculating fare:", error);
+      res.status(500).json({ message: "Failed to calculate fare" });
+    }
+  });
+  
   // Calculate ride cancellation penalty
   app.post("/api/rides/:id/cancel", async (req, res) => {
     try {
