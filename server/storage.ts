@@ -22,6 +22,7 @@ export interface IStorage {
   createDriver(driver: InsertDriver): Promise<Driver>;
   updateDriverStatus(id: number, isActive: boolean): Promise<Driver | undefined>;
   updateDriverLocation(id: number, latitude: number, longitude: number): Promise<Driver | undefined>;
+  updateDriverTokens(id: number, tokens: number): Promise<Driver | undefined>;
   
   // Ride methods
   getAllRides(): Promise<Ride[]>;
@@ -34,6 +35,7 @@ export interface IStorage {
   updateRideStatus(id: number, status: string): Promise<Ride | undefined>;
   assignDriver(id: number, driverId: number): Promise<Ride | undefined>;
   completeRide(id: number, rating: number): Promise<Ride | undefined>;
+  cancelRide(id: number, reason: string, penalty: number): Promise<Ride | undefined>;
   
   // Payment methods
   getAllPayments(): Promise<Payment[]>;
@@ -123,6 +125,18 @@ export class DatabaseStorage implements IStorage {
     const [updatedDriver] = await db
       .update(drivers)
       .set({ latitude, longitude })
+      .where(eq(drivers.id, id))
+      .returning();
+    return updatedDriver;
+  }
+  
+  async updateDriverTokens(id: number, tokens: number): Promise<Driver | undefined> {
+    const [updatedDriver] = await db
+      .update(drivers)
+      .set({ 
+        tokens,
+        lastTokenUpdate: new Date()
+      })
       .where(eq(drivers.id, id))
       .returning();
     return updatedDriver;
@@ -224,6 +238,21 @@ export class DatabaseStorage implements IStorage {
           .where(eq(drivers.id, updatedRide.driverId));
       }
     }
+    
+    return updatedRide;
+  }
+
+  async cancelRide(id: number, reason: string, penalty: number): Promise<Ride | undefined> {
+    const [updatedRide] = await db
+      .update(rides)
+      .set({
+        status: 'cancelled',
+        cancellationReason: reason,
+        cancellationPenalty: penalty,
+        cancellationTime: new Date()
+      })
+      .where(eq(rides.id, id))
+      .returning();
     
     return updatedRide;
   }

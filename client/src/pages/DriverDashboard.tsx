@@ -1,589 +1,410 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Car, MapPin, User, Calendar, Star, Clock, Loader2, LocateFixed } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Sparkles, Activity, MapPin, Award, TrendingUp, Clock, Car, Coins } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import { useWebSocket } from '@/hooks/use-websocket';
 
-// Mock driver ID for demo (in a real app, this would come from authentication)
-const MOCK_DRIVER_ID = 1;
-const MOCK_USER_ID = 1;
+interface HotspotPrediction {
+  area: string;
+  coordinates: { latitude: number; longitude: number };
+  probability: number; 
+  estimatedFare: number;
+}
+
+interface DriverStats {
+  totalRides: number;
+  totalRating: number;
+  tokens: number;
+  isActive: boolean;
+}
 
 export default function DriverDashboard() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [isOnline, setIsOnline] = useState(false);
+  const [driverId, setDriverId] = useState<number>(1); // Placeholder driver ID
+  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [activeView, setActiveView] = useState<'predictions' | 'tokens'>('predictions');
   
-  // Fetch driver details
-  const { data: driver, isLoading: isLoadingDriver } = useQuery({
-    queryKey: ['/api/drivers', MOCK_DRIVER_ID],
-    queryFn: () => apiRequest(`/api/drivers/${MOCK_DRIVER_ID}`),
-  });
-  
-  // Fetch driver user details
-  const { data: driverUser } = useQuery({
-    queryKey: ['/api/users', MOCK_USER_ID],
-    queryFn: () => apiRequest(`/api/users/${MOCK_USER_ID}`),
-    enabled: !!driver,
-  });
-  
-  // Fetch active ride
-  const { data: activeRide, isLoading: isLoadingRide } = useQuery({
-    queryKey: ['/api/rides/driver', MOCK_DRIVER_ID, 'active'],
-    queryFn: () => apiRequest(`/api/rides/driver/${MOCK_DRIVER_ID}/active`),
-    refetchInterval: isOnline ? 5000 : false, // Poll when online
-    retry: false,
-  });
-  
-  // Fetch ride requests when online
-  const { data: rideRequests = [] } = useQuery({
-    queryKey: ['/api/rides'],
-    queryFn: async () => {
-      const rides = await apiRequest('/api/rides');
-      // Filter for unassigned rides with status "requested"
-      return rides.filter(ride => ride.status === "requested");
-    },
-    refetchInterval: isOnline && !activeRide ? 5000 : false, // Poll when online and not on an active ride
-    enabled: isOnline && !activeRide,
-  });
-  
-  // Fetch all driver's past rides
-  const { data: pastRides = [] } = useQuery({
-    queryKey: ['/api/rides/driver', MOCK_DRIVER_ID],
-    queryFn: async () => {
-      const rides = await apiRequest(`/api/rides/driver/${MOCK_DRIVER_ID}`);
-      // Only return completed rides
-      return rides.filter(ride => ride.status === "completed");
-    },
-  });
-  
-  // Toggle online status mutation
-  const toggleStatusMutation = useMutation({
-    mutationFn: (isActive: boolean) => 
-      apiRequest(`/api/drivers/${MOCK_DRIVER_ID}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ isActive }),
-      }),
-    onSuccess: () => {
-      setIsOnline(prev => !prev);
-      toast({
-        title: isOnline ? "You are now offline" : "You are now online",
-        description: isOnline 
-          ? "You won't receive new ride requests" 
-          : "You'll start receiving ride requests",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Status update failed",
-        description: "Failed to update your status. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Accept ride mutation
-  const acceptRideMutation = useMutation({
-    mutationFn: (rideId: number) => 
-      apiRequest(`/api/rides/${rideId}/assign`, {
-        method: "PUT",
-        body: JSON.stringify({ driverId: MOCK_DRIVER_ID }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/rides'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/rides/driver', MOCK_DRIVER_ID, 'active'] });
-      toast({
-        title: "Ride Accepted",
-        description: "You have successfully accepted the ride.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to accept ride",
-        description: "Someone else may have already accepted this ride.",
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Complete ride mutation
-  const completeRideMutation = useMutation({
-    mutationFn: (rideId: number) => 
-      apiRequest(`/api/rides/${rideId}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status: "completed" }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/rides/driver', MOCK_DRIVER_ID, 'active'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/rides/driver', MOCK_DRIVER_ID] });
-      toast({
-        title: "Ride Completed",
-        description: "The ride has been marked as completed.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to complete ride",
-        description: "There was an error completing the ride.",
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Update location mutation
-  const updateLocationMutation = useMutation({
-    mutationFn: (location: { latitude: number; longitude: number }) => 
-      apiRequest(`/api/drivers/${MOCK_DRIVER_ID}/location`, {
-        method: "PUT",
-        body: JSON.stringify(location),
-      }),
-    onSuccess: () => {
-      console.log("Location updated");
-    },
-  });
-  
-  // Handle online/offline toggle
-  const handleToggleStatus = () => {
-    toggleStatusMutation.mutate(!isOnline);
-  };
-  
-  // Handle ride acceptance
-  const handleAcceptRide = (rideId: number) => {
-    acceptRideMutation.mutate(rideId);
-  };
-  
-  // Handle ride completion
-  const handleCompleteRide = (rideId: number) => {
-    completeRideMutation.mutate(rideId);
-  };
-  
-  // Update driver location when online
-  useEffect(() => {
-    if (!isOnline) return;
-    
-    // Track location
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        updateLocationMutation.mutate({ latitude, longitude });
-      },
-      (error) => {
-        console.error("Error getting location:", error);
+  // Connection to real-time websocket for location updates and ride requests
+  const { connected, sendMessage } = useWebSocket({
+    userType: 'driver',
+    userId: driverId,
+    onMessage: (data) => {
+      // Handle incoming messages (ride requests, etc.)
+      if (data.type === 'ride_request') {
         toast({
-          title: "Location Error",
-          description: "Unable to get your location. Please check your location permissions.",
+          title: "New Ride Request",
+          description: `Pickup: ${data.pickupLocation}`,
+          duration: 10000,
+        });
+      } else if (data.type === 'ride_cancelled') {
+        toast({
+          title: "Ride Cancelled",
+          description: `Reason: ${data.cancellationReason || 'Not provided'}`,
           variant: "destructive",
+          duration: 5000,
         });
       }
-    );
-    
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
-  }, [isOnline, toast, updateLocationMutation]);
-  
-  // Set initial online status from driver data
-  useEffect(() => {
-    if (driver) {
-      setIsOnline(!!driver.isActive);
     }
-  }, [driver]);
-  
-  // Show loading state
-  if (isLoadingDriver) {
-    return (
-      <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <h2 className="text-xl font-medium">Loading your dashboard...</h2>
-      </div>
-    );
-  }
-  
-  // Calculate driver stats
-  const calculateAverageRating = () => {
-    if (!driver || !pastRides.length) return "N/A";
+  });
+
+  // Fetch driver details
+  const { data: driverData, isLoading: loadingDriver } = useQuery({
+    queryKey: ['/api/drivers', driverId],
+    queryFn: () => apiRequest<DriverStats>(`/api/drivers/${driverId}`),
+    enabled: !!driverId,
+  });
+
+  // Fetch AI predictions for best ride spots
+  const { data: predictions, isLoading: loadingPredictions } = useQuery({
+    queryKey: ['/api/ai/predict-rides', driverId, coordinates?.latitude, coordinates?.longitude],
+    queryFn: () => 
+      apiRequest<{ hotspots: HotspotPrediction[] }>(`/api/ai/predict-rides/${driverId}`),
+    enabled: !!driverId && !!coordinates,
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
+  });
+
+  // Fetch token rewards
+  const { data: tokenData, isLoading: loadingTokens } = useQuery({
+    queryKey: ['/api/ai/driver-tokens', driverId],
+    queryFn: () => 
+      apiRequest<{ tokensPrevious: number; tokensEarned: number; tokensTotal: number }>(`/api/ai/driver-tokens/${driverId}`),
+    enabled: !!driverId,
+  });
+
+  // Get the driver's current location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const newCoordinates = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          setCoordinates(newCoordinates);
+          
+          // Send location update via WebSocket if connected
+          if (connected) {
+            sendMessage({
+              type: 'location_update',
+              userType: 'driver',
+              userId: driverId,
+              ...newCoordinates
+            });
+          }
+        },
+        (error) => {
+          // Handle geolocation error
+          toast({
+            title: "Location Error",
+            description: "Unable to access your location. Some features may be limited.",
+            variant: "destructive"
+          });
+          
+          // Use default Tamale coordinates
+          setCoordinates({
+            latitude: 9.4047,
+            longitude: -0.8423
+          });
+        },
+        { 
+          enableHighAccuracy: true,
+          maximumAge: 30000,
+          timeout: 27000
+        }
+      );
+      
+      // Set up location tracking
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const newCoordinates = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          setCoordinates(newCoordinates);
+          
+          // Send location update via WebSocket if connected
+          if (connected) {
+            sendMessage({
+              type: 'location_update',
+              userType: 'driver',
+              userId: driverId,
+              ...newCoordinates
+            });
+          }
+        },
+        (error) => {
+          console.error("Geolocation watch error:", error);
+        },
+        { 
+          enableHighAccuracy: true,
+          maximumAge: 15000,
+          timeout: 12000
+        }
+      );
+      
+      return () => {
+        navigator.geolocation.clearWatch(watchId);
+      };
+    }
+  }, [driverId, connected, sendMessage, toast]);
+
+  // Toggle driver active status
+  const toggleActiveStatus = async () => {
+    if (!driverData) return;
     
-    const totalRating = pastRides.reduce((sum, ride) => sum + (ride.rating || 0), 0);
-    const avgRating = totalRating / pastRides.length;
-    return avgRating.toFixed(1);
-  };
-  
-  const calculateTotalEarnings = () => {
-    if (!pastRides.length) return 0;
-    
-    return pastRides.reduce((sum, ride) => sum + ride.fare, 0);
+    try {
+      const updatedDriver = await apiRequest(`/api/drivers/${driverId}/status`, {
+        method: 'PUT',
+        body: { isActive: !driverData.isActive }
+      });
+      
+      toast({
+        title: updatedDriver.isActive ? "You're now online" : "You're now offline",
+        description: updatedDriver.isActive 
+          ? "You'll receive ride requests in your area" 
+          : "You won't receive any ride requests",
+        duration: 3000
+      });
+    } catch (error) {
+      toast({
+        title: "Status update failed",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Driver Profile Card */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>Driver Profile</CardTitle>
-              <div className="flex items-center gap-2">
-                <Switch 
-                  checked={isOnline}
-                  onCheckedChange={handleToggleStatus}
-                  disabled={toggleStatusMutation.isPending}
-                />
-                <Label className={isOnline ? "text-primary" : "text-muted-foreground"}>
-                  {isOnline ? "Online" : "Offline"}
-                </Label>
-              </div>
-            </div>
-            <CardDescription>
-              Your driver profile and status
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-8 w-8 text-primary" />
-              </div>
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Driver Dashboard</h1>
+          <p className="text-muted-foreground">
+            View predictions, manage rides, and track your rewards
+          </p>
+        </div>
+        <div className="mt-4 sm:mt-0">
+          <Button
+            onClick={toggleActiveStatus}
+            variant={driverData?.isActive ? "default" : "outline"}
+            className={driverData?.isActive ? "bg-green-600 hover:bg-green-700" : ""}
+          >
+            <Car className="mr-2 h-4 w-4" />
+            {driverData?.isActive ? "Online" : "Go Online"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Driver Stats Summary */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <Activity className="h-10 w-10 text-primary" />
               <div>
-                <h3 className="text-lg font-semibold">{driverUser?.username || "Driver"}</h3>
-                <p className="text-muted-foreground">{driverUser?.phoneNumber || "No phone"}</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Vehicle</p>
-                <div className="flex items-center gap-1">
-                  <Car className="h-4 w-4 text-primary" />
-                  <p className="font-medium">{driver?.licensePlate || "Not set"}</p>
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Rating</p>
-                <div className="flex items-center gap-1">
-                  <Star className="h-4 w-4 text-secondary fill-current" />
-                  <p className="font-medium">{calculateAverageRating()}</p>
-                </div>
-              </div>
-              
-              <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Total Rides</p>
-                <p className="font-medium">{driver?.totalRides || 0}</p>
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Earnings</p>
-                <p className="font-medium">GHS {calculateTotalEarnings()}</p>
+                <p className="text-2xl font-bold">
+                  {loadingDriver ? '...' : driverData?.totalRides || 0}
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        {/* Main Content Area */}
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="active">
-            <TabsList className="grid grid-cols-3 mb-4">
-              <TabsTrigger value="active">Active Ride</TabsTrigger>
-              <TabsTrigger value="requests">Ride Requests</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
-            </TabsList>
-            
-            {/* Active Ride */}
-            <TabsContent value="active" className="space-y-4">
-              {isLoadingRide ? (
-                <div className="h-48 flex items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <Award className="h-10 w-10 text-primary" />
+              <div>
+                <p className="text-sm text-muted-foreground">Rating</p>
+                <p className="text-2xl font-bold">
+                  {loadingDriver ? '...' : 
+                    driverData && driverData.totalRides > 0 ? 
+                    (driverData.totalRating / driverData.totalRides).toFixed(1) : 
+                    'N/A'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <Coins className="h-10 w-10 text-yellow-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">YeloTokens</p>
+                <p className="text-2xl font-bold">
+                  {loadingTokens ? '...' : driverData?.tokens || 0}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-2">
+              <Clock className="h-10 w-10 text-green-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <Badge 
+                  variant="outline" 
+                  className={driverData?.isActive ? "bg-green-100 text-green-800 border-green-300" : "bg-gray-100 text-gray-800 border-gray-300"}
+                >
+                  {driverData?.isActive ? "Online" : "Offline"}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* View Toggle */}
+      <div className="flex space-x-2 pb-2">
+        <Button 
+          variant={activeView === 'predictions' ? "default" : "outline"}
+          onClick={() => setActiveView('predictions')}
+        >
+          <TrendingUp className="mr-2 h-4 w-4" />
+          AI Predictions
+        </Button>
+        <Button 
+          variant={activeView === 'tokens' ? "default" : "outline"}
+          onClick={() => setActiveView('tokens')}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          Token Rewards
+        </Button>
+      </div>
+
+      {/* Main Content Section */}
+      {activeView === 'predictions' ? (
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle>
+              <div className="flex items-center">
+                <TrendingUp className="mr-2 h-5 w-5 text-primary" />
+                AI Ride Predictions
+              </div>
+            </CardTitle>
+            <CardDescription>
+              Hotspots with high ride demand in Tamale right now
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingPredictions ? (
+              <div className="py-8 text-center">
+                <div className="animate-pulse mb-4">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
                 </div>
-              ) : activeRide ? (
-                <Card>
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <CardTitle>Current Ride</CardTitle>
-                      <Badge variant={activeRide.status === "requested" ? "outline" : "default"}>
-                        {activeRide.status === "requested" ? "Requested" : "In Progress"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-3 border rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <MapPin className="h-5 w-5 text-primary mt-0.5" />
+                <p className="text-muted-foreground">Analyzing ride patterns...</p>
+              </div>
+            ) : predictions && predictions.hotspots ? (
+              <div className="space-y-4">
+                {predictions.hotspots.map((hotspot, index) => (
+                  <div key={index} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-start space-x-3">
+                        <MapPin className={`h-5 w-5 mt-1 ${index === 0 ? 'text-rose-500' : 'text-gray-500'}`} />
                         <div>
-                          <p className="text-sm text-muted-foreground">Pickup</p>
-                          <p className="font-medium">{activeRide.pickupLocation}</p>
+                          <p className="font-medium">{hotspot.area}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Estimated fare: ₵{hotspot.estimatedFare.toFixed(2)}
+                          </p>
                         </div>
                       </div>
-                      {activeRide.dropoffLocation && (
-                        <div className="flex items-start gap-3">
-                          <MapPin className="h-5 w-5 text-secondary mt-0.5" />
-                          <div>
-                            <p className="text-sm text-muted-foreground">Destination</p>
-                            <p className="font-medium">{activeRide.dropoffLocation}</p>
-                          </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">
+                          {(hotspot.probability * 100).toFixed(0)}% chance
                         </div>
-                      )}
+                        <Progress 
+                          value={hotspot.probability * 100} 
+                          className="h-2 w-24"
+                        />
+                      </div>
                     </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span>Fare:</span>
-                      <span className="font-semibold">GHS {activeRide.fare}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-muted-foreground">No predictions available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle>
+              <div className="flex items-center">
+                <Sparkles className="mr-2 h-5 w-5 text-yellow-500" />
+                Token Rewards System
+              </div>
+            </CardTitle>
+            <CardDescription>
+              Earn YeloTokens for completing rides and maintaining good ratings
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h3 className="font-medium text-yellow-900 mb-2 flex items-center">
+                  <Coins className="mr-2 h-5 w-5" />
+                  YeloToken Rewards
+                </h3>
+                <p className="text-sm text-yellow-800 mb-4">
+                  Complete more rides to earn tokens. Every 10 rides earns you 1 token,
+                  with bonus tokens for high ratings and consistent activity.
+                </p>
+                
+                <div className="bg-white rounded p-3 border border-yellow-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium">Token Balance</span>
+                    <span className="font-bold">{driverData?.tokens || 0}</span>
+                  </div>
+                  
+                  <Separator className="my-3" />
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span>Tokens from rides</span>
+                      <span>{Math.floor((driverData?.totalRides || 0) / 10)}</span>
                     </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button 
-                      className="w-full yelo-gradient"
-                      onClick={() => handleCompleteRide(activeRide.id)}
-                      disabled={completeRideMutation.isPending}
-                    >
-                      {completeRideMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing
-                        </>
-                      ) : (
-                        "Complete Ride"
-                      )}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>No Active Ride</CardTitle>
-                    <CardDescription>
-                      {isOnline 
-                        ? "You're online and ready to accept rides. Check the 'Ride Requests' tab for available requests."
-                        : "You're currently offline. Go online to start accepting rides."
-                      }
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex justify-center py-8">
-                    <div className="text-center">
-                      <Car className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                      <p className="text-muted-foreground">No active ride at the moment</p>
+                    <div className="flex justify-between text-sm">
+                      <span>Rating bonus</span>
+                      <span>{driverData && driverData.totalRides > 0 && (driverData.totalRating / driverData.totalRides) >= 4.5 ? '3' : driverData && driverData.totalRides > 0 && (driverData.totalRating / driverData.totalRides) >= 4.0 ? '2' : driverData && driverData.totalRides > 0 && (driverData.totalRating / driverData.totalRides) >= 3.5 ? '1' : '0'}</span>
                     </div>
-                  </CardContent>
-                  {!isOnline && (
-                    <CardFooter>
-                      <Button 
-                        className="w-full"
-                        onClick={handleToggleStatus}
-                        disabled={toggleStatusMutation.isPending}
-                      >
-                        Go Online
-                      </Button>
-                    </CardFooter>
-                  )}
-                </Card>
-              )}
+                  </div>
+                </div>
+              </div>
               
-              {isOnline && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Your Location</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2">
-                      <LocateFixed className="h-5 w-5 text-primary" />
-                      <p className="text-sm">
-                        {driver?.latitude && driver?.longitude
-                          ? `Lat: ${driver.latitude.toFixed(6)}, Lng: ${driver.longitude.toFixed(6)}`
-                          : "Location tracking active..."
-                        }
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-            
-            {/* Ride Requests */}
-            <TabsContent value="requests">
-              {!isOnline ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>You're Offline</CardTitle>
-                    <CardDescription>
-                      Go online to see and accept ride requests
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="py-8 flex justify-center">
-                    <Button 
-                      onClick={handleToggleStatus}
-                      disabled={toggleStatusMutation.isPending}
-                    >
-                      Go Online
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : activeRide ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>You Have an Active Ride</CardTitle>
-                    <CardDescription>
-                      Complete your current ride before accepting new requests
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="py-8 flex justify-center">
-                    <Button 
-                      onClick={() => handleCompleteRide(activeRide.id)}
-                      variant="outline"
-                    >
-                      Go to Active Ride
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : rideRequests.length === 0 ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>No Ride Requests</CardTitle>
-                    <CardDescription>
-                      There are no ride requests at the moment
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex justify-center py-8">
-                    <div className="text-center">
-                      <Clock className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                      <p className="text-muted-foreground">Waiting for new requests...</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  {rideRequests.map((request) => (
-                    <Card key={request.id}>
-                      <CardHeader>
-                        <div className="flex justify-between items-center">
-                          <CardTitle className="text-base">New Ride Request</CardTitle>
-                          <Badge variant="outline">
-                            {new Date(request.requestTime).toLocaleTimeString()}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-3 border rounded-lg p-4">
-                          <div className="flex items-start gap-3">
-                            <MapPin className="h-5 w-5 text-primary mt-0.5" />
-                            <div>
-                              <p className="text-sm text-muted-foreground">Pickup</p>
-                              <p className="font-medium">{request.pickupLocation}</p>
-                            </div>
-                          </div>
-                          {request.dropoffLocation && (
-                            <div className="flex items-start gap-3">
-                              <MapPin className="h-5 w-5 text-secondary mt-0.5" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Destination</p>
-                                <p className="font-medium">{request.dropoffLocation}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span>Fare:</span>
-                          <span className="font-semibold">GHS {request.fare}</span>
-                        </div>
-                      </CardContent>
-                      <CardFooter>
-                        <Button 
-                          className="w-full yelo-gradient"
-                          onClick={() => handleAcceptRide(request.id)}
-                          disabled={acceptRideMutation.isPending}
-                        >
-                          {acceptRideMutation.isPending ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Processing
-                            </>
-                          ) : (
-                            "Accept Ride"
-                          )}
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
+              <div className="border rounded-lg p-4">
+                <h3 className="font-medium mb-4">Redeem Tokens</h3>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                  <Button variant="outline" className="border-dashed h-auto py-4 flex flex-col">
+                    <span className="font-medium">Discount on Platform Fee</span>
+                    <span className="text-sm text-muted-foreground mt-1">10 tokens = 5% discount</span>
+                  </Button>
+                  
+                  <Button variant="outline" className="border-dashed h-auto py-4 flex flex-col">
+                    <span className="font-medium">Priority Ride Matching</span>
+                    <span className="text-sm text-muted-foreground mt-1">15 tokens = 1 week</span>
+                  </Button>
                 </div>
-              )}
-            </TabsContent>
-            
-            {/* Ride History */}
-            <TabsContent value="history">
-              {pastRides.length === 0 ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>No Ride History</CardTitle>
-                    <CardDescription>
-                      You haven't completed any rides yet
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex justify-center py-8">
-                    <div className="text-center">
-                      <Calendar className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                      <p className="text-muted-foreground">Your ride history will appear here</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  {pastRides.map((ride) => (
-                    <Card key={ride.id}>
-                      <CardHeader className="pb-2">
-                        <div className="flex justify-between items-center">
-                          <CardTitle className="text-base">Completed Ride</CardTitle>
-                          <div className="flex items-center gap-1">
-                            <Badge variant="secondary">
-                              {ride.rating ? (
-                                <div className="flex items-center">
-                                  <Star className="h-3 w-3 fill-current mr-1" />
-                                  {ride.rating}
-                                </div>
-                              ) : (
-                                "No Rating"
-                              )}
-                            </Badge>
-                          </div>
-                        </div>
-                        <CardDescription>
-                          {new Date(ride.completionTime || ride.requestTime).toLocaleDateString()}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3 pt-0">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <p className="text-sm text-muted-foreground">Pickup</p>
-                            <p className="font-medium">{ride.pickupLocation}</p>
-                          </div>
-                        </div>
-                        
-                        {ride.dropoffLocation && (
-                          <div className="flex items-start gap-3">
-                            <MapPin className="h-5 w-5 text-secondary mt-0.5" />
-                            <div>
-                              <p className="text-sm text-muted-foreground">Destination</p>
-                              <p className="font-medium">{ride.dropoffLocation}</p>
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-between items-center pt-2">
-                          <span>Earned:</span>
-                          <span className="font-semibold">GHS {ride.fare}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

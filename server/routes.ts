@@ -612,12 +612,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const penalty = AIService.calculateCancellationPenalty(rideId, elapsedMinutes, isDriverAssigned);
       
       // Update ride in database with cancellation details
-      const updatedRide = await storage.updateRideStatus(rideId, "cancelled");
+      const updatedRide = await storage.cancelRide(rideId, reason, penalty);
       
-      // In a real implementation, we'd also:
-      // 1. Update the ride with cancellation reason
-      // 2. Apply the penalty to the user's account
-      // 3. Notify the driver if one was assigned
+      // Notify the driver if one was assigned
+      if (isDriverAssigned && ride.driverId) {
+        const driverConnectionId = `driver:${ride.driverId}`;
+        const driverWs = connections[driverConnectionId];
+        
+        if (driverWs && driverWs.readyState === WebSocket.OPEN) {
+          driverWs.send(JSON.stringify({
+            type: 'ride_cancelled',
+            rideId,
+            cancellationReason: reason,
+            timestamp: new Date().toISOString()
+          }));
+        }
+      }
       
       res.json({
         rideId,
