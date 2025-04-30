@@ -143,8 +143,11 @@ export class AIService {
     
     // Rating bonus: additional tokens for high average rating
     let avgRating = 0;
-    if (driver.totalRides > 0) {
-      avgRating = driver.totalRating / driver.totalRides;
+    const totalRides = driver.totalRides || 0;
+    const totalRating = driver.totalRating || 0;
+    
+    if (totalRides > 0) {
+      avgRating = totalRating / totalRides;
     }
     
     const ratingBonus = avgRating >= 4.5 ? 3 : 

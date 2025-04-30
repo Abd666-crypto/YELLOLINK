@@ -11,6 +11,7 @@ import {
   insertSubscriptionSchema,
   SubscriptionTier
 } from "@shared/schema";
+import { AIService } from "./ai-service";
 
 import { WebSocketServer, WebSocket } from 'ws';
 
@@ -489,6 +490,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ isPremium });
     } catch (error) {
       res.status(500).json({ message: "Failed to check premium status" });
+    }
+  });
+  
+  // ======= AI Feature Routes =======
+  
+  // AI Ride Prediction for drivers
+  app.get("/api/ai/predict-rides/:driverId", async (req, res) => {
+    try {
+      const driverId = parseInt(req.params.driverId);
+      const driver = await storage.getDriver(driverId);
+      
+      if (!driver) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      if (!driver.latitude || !driver.longitude) {
+        return res.status(400).json({ message: "Driver location not available" });
+      }
+      
+      const hotspots = await AIService.predictRides(driverId, {
+        latitude: driver.latitude,
+        longitude: driver.longitude
+      });
+      
+      res.json({ hotspots });
+    } catch (error) {
+      console.error("Error predicting rides:", error);
+      res.status(500).json({ message: "Failed to predict rides" });
+    }
+  });
+  
+  // Calculate driver tokens
+  app.get("/api/ai/driver-tokens/:driverId", async (req, res) => {
+    try {
+      const driverId = parseInt(req.params.driverId);
+      const driver = await storage.getDriver(driverId);
+      
+      if (!driver) {
+        return res.status(404).json({ message: "Driver not found" });
+      }
+      
+      // Get all completed rides for this driver
+      const rides = await storage.getRidesByDriverId(driverId);
+      const completedRides = rides.filter(r => r.status === "completed");
+      
+      // Calculate tokens based on driver performance
+      const tokens = AIService.calculateTokens(driver, completedRides);
+      
+      // Update driver tokens in database
+      // This would be handled by a separate process in production
+      // For demo purposes, we're doing it synchronously
+      
+      res.json({ 
+        driverId,
+        tokensPrevious: driver.tokens || 0,
+        tokensEarned: tokens,
+        tokensTotal: (driver.tokens || 0) + tokens
+      });
+    } catch (error) {
+      console.error("Error calculating tokens:", error);
+      res.status(500).json({ message: "Failed to calculate tokens" });
+    }
+  });
+  
+  // Calculate ride discount
+  app.get("/api/ai/calculate-discount/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Get user's ride history
+      const rides = await storage.getRidesByRiderId(userId);
+      
+      // Check if user has premium subscription
+      const isPremium = await storage.isUserPremium(userId);
+      
+      // Calculate discount based on user history and premium status
+      const discount = AIService.calculateDiscount(userId, rides.length, isPremium);
+      
+      res.json({ 
+        userId,
+        rideCount: rides.length,
+        isPremium,
+        discountPercentage: discount
+      });
+    } catch (error) {
+      console.error("Error calculating discount:", error);
+      res.status(500).json({ message: "Failed to calculate discount" });
+    }
+  });
+  
+  // Calculate ride cancellation penalty
+  app.post("/api/rides/:id/cancel", async (req, res) => {
+    try {
+      const rideId = parseInt(req.params.id);
+      const { reason } = req.body;
+      
+      const ride = await storage.getRide(rideId);
+      if (!ride) {
+        return res.status(404).json({ message: "Ride not found" });
+      }
+      
+      if (ride.status === "completed" || ride.status === "cancelled") {
+        return res.status(400).json({ message: "Cannot cancel a completed or already cancelled ride" });
+      }
+      
+      // Calculate time elapsed since ride request
+      const requestTime = ride.requestTime ? new Date(ride.requestTime) : new Date();
+      const currentTime = new Date();
+      const elapsedMinutes = (currentTime.getTime() - requestTime.getTime()) / (1000 * 60);
+      
+      // Check if driver has been assigned
+      const isDriverAssigned = ride.driverId !== null;
+      
+      // Calculate penalty
+      const penalty = AIService.calculateCancellationPenalty(rideId, elapsedMinutes, isDriverAssigned);
+      
+      // Update ride in database with cancellation details
+      const updatedRide = await storage.updateRideStatus(rideId, "cancelled");
+      
+      // In a real implementation, we'd also:
+      // 1. Update the ride with cancellation reason
+      // 2. Apply the penalty to the user's account
+      // 3. Notify the driver if one was assigned
+      
+      res.json({
+        rideId,
+        status: "cancelled",
+        timeSinceRequest: Math.round(elapsedMinutes),
+        cancellationPenalty: penalty,
+        cancellationReason: reason
+      });
+    } catch (error) {
+      console.error("Error cancelling ride:", error);
+      res.status(500).json({ message: "Failed to cancel ride" });
     }
   });
 

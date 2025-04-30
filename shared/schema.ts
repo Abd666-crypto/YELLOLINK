@@ -42,13 +42,22 @@ export const rides = pgTable("rides", {
   riderId: integer("rider_id").references(() => users.id).notNull(),
   driverId: integer("driver_id").references(() => drivers.id),
   pickupLocation: text("pickup_location").notNull(),
+  pickupLatitude: doublePrecision("pickup_latitude"),
+  pickupLongitude: doublePrecision("pickup_longitude"),
   dropoffLocation: text("dropoff_location"),
+  dropoffLatitude: doublePrecision("dropoff_latitude"),
+  dropoffLongitude: doublePrecision("dropoff_longitude"),
   status: text("status").notNull().default("requested"), // requested, assigned, completed, cancelled
   fare: integer("fare").notNull(),
+  discountApplied: integer("discount_applied").default(0), // discount amount in percentage
+  cancellationPenalty: integer("cancellation_penalty").default(0), // penalty in percentage if cancelled
+  cancellationReason: text("cancellation_reason"), // reason for cancellation if provided
   momoTxId: text("momo_tx_id").notNull(),
   rating: integer("rating"),
   requestTime: timestamp("request_time").defaultNow(),
+  assignmentTime: timestamp("assignment_time"), // when driver was assigned
   completionTime: timestamp("completion_time"),
+  cancellationTime: timestamp("cancellation_time"), // when ride was cancelled
 });
 
 // Payments table - record of payments made through MoMo
@@ -117,9 +126,16 @@ export const insertRideSchema = createInsertSchema(rides).pick({
   riderId: true,
   driverId: true,
   pickupLocation: true,
+  pickupLatitude: true,
+  pickupLongitude: true,
   dropoffLocation: true,
+  dropoffLatitude: true,
+  dropoffLongitude: true,
   status: true,
   fare: true,
+  discountApplied: true,
+  cancellationPenalty: true,
+  cancellationReason: true,
   momoTxId: true,
 });
 
