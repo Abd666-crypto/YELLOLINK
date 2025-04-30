@@ -32,6 +32,8 @@ export const drivers = pgTable("drivers", {
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
   isActive: boolean("is_active").default(false),
+  tokens: integer("tokens").default(0), // Reward tokens earned
+  lastTokenUpdate: timestamp("last_token_update"),
 });
 
 // Rides table - ride requests and details
